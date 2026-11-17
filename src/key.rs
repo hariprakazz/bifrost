@@ -77,3 +77,67 @@ mod tests {
         assert!(preprocessed("clang", &argv(&src)).is_none());
     }
 }
+
+fn compiler_version(compiler: &str) -> Option<Vec<u8>> {
+    let out = Command::new(compiler).arg("--version").output().ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    Some(out.stdout)
+}
+
+pub fn cache_key(compiler: &str, rest: &[String], pre: &[u8]) -> Option<String> {
+    let ver = compiler_version(compiler)?;
+    let mut hasher = blake3::Hasher::new();
+    let mut feed = |part: &[u8]| {
+        hasher.update(&(part.len() as u64).to_le_bytes());
+        hasher.update(part);
+    };
+
+    feed(&ver);
+    let mut iter = rest.iter();
+    while let Some(arg) = iter.next() {
+        if arg == "-o" {
+            iter.next();
+            continue;
+        }
+        feed(arg.as_bytes());
+    }
+    feed(pre);
+
+    Some(hasher.finalize().to_hex().to_string())
+}
+
+#[cfg(test)]
+mod flag_tests {
+    use super::*;
+    use std::fs;
+
+    fn argv(src: &str, opt: &str) -> Vec<String> {
+        vec![
+            opt.to_string(),
+            "-c".to_string(),
+            src.to_string(),
+            "-o".to_string(),
+            "x.o".to_string(),
+        ]
+    }
+
+    #[test]
+    fn opt_level_changes_key() {
+        let dir = std::env::temp_dir().join(format!("bifrost-opt-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let src = dir.join("a.c");
+        fs::write(&src, "int a(void) { return 1; }\n").unwrap();
+        let path = src.display().to_string();
+        let slow = argv(&path, "-O0");
+        let fast = argv(&path, "-O2");
+        let pre_slow = preprocessed("clang", &slow).unwrap();
+        let pre_fast = preprocessed("clang", &fast).unwrap();
+        assert_eq!(pre_slow, pre_fast);
+        assert_ne!(
+            cache_key("clang", &slow, &pre_slow),
+            cache_key("clang", &fast, &pre_fast)
+        );
+    }
+}
