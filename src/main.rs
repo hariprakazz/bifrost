@@ -1,3 +1,5 @@
+mod args;
+
 use std::env;
 use std::process::{exit, Command};
 
