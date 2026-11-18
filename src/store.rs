@@ -29,7 +29,13 @@ impl Store {
         if !slot.is_file() {
             return Ok(false);
         }
-        fs::copy(&slot, dest)?;
+        let dir = dest.parent().unwrap_or(Path::new(""));
+        let tmp = dir.join(format!(".bifrost-{}.tmp", std::process::id()));
+        if let Err(err) = fs::copy(&slot, &tmp) {
+            let _ = fs::remove_file(&tmp);
+            return Err(err);
+        }
+        fs::rename(&tmp, dest)?;
         Ok(true)
     }
 
@@ -75,6 +81,23 @@ mod tests {
         store.put(KEY, &obj).unwrap();
         assert!(store.fetch(KEY, &dest).unwrap());
         assert_eq!(fs::read(&obj).unwrap(), fs::read(&dest).unwrap());
+    }
+
+    #[test]
+    fn fetch_leaves_no_temp_files() {
+        let dir = scratch("fetchtmp");
+        let store = Store::new(dir.join("cache"));
+        let obj = dir.join("in.o");
+        let out = dir.join("out");
+        fs::create_dir_all(&out).unwrap();
+        fs::write(&obj, b"data").unwrap();
+        store.put(KEY, &obj).unwrap();
+        assert!(store.fetch(KEY, &out.join("a.o")).unwrap());
+        let names: Vec<String> = fs::read_dir(&out)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().to_string())
+            .collect();
+        assert_eq!(names, vec!["a.o".to_string()]);
     }
 
     #[test]
