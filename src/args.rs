@@ -8,7 +8,7 @@ pub struct Job {
 
 const SRC_EXT: [&str; 4] = ["c", "cc", "cpp", "cxx"];
 
-const BYPASS: [&str; 9] = [
+const BYPASS: [&str; 13] = [
     "-ftime-trace",
     "--serialize-diagnostics",
     "-MJ",
@@ -18,6 +18,10 @@ const BYPASS: [&str; 9] = [
     "-fprofile-sample-use",
     "-fsanitize-ignorelist",
     "-fsanitize-blacklist",
+    "--coverage",
+    "-fprofile-arcs",
+    "-ftest-coverage",
+    "-fprofile-generate",
 ];
 
 pub fn parse(rest: &[String]) -> Option<Job> {
@@ -116,6 +120,13 @@ mod tests {
     #[test]
     fn extra_output_flags_are_skipped() {
         for flag in BYPASS {
+            assert!(parse(&argv(&["-c", "a.c", flag, "-o", "a.o"])).is_none());
+        }
+    }
+
+    #[test]
+    fn coverage_flags_are_skipped() {
+        for flag in ["--coverage", "-fprofile-arcs", "-ftest-coverage", "-fprofile-generate"] {
             assert!(parse(&argv(&["-c", "a.c", flag, "-o", "a.o"])).is_none());
         }
     }
