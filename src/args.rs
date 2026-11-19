@@ -8,6 +8,18 @@ pub struct Job {
 
 const SRC_EXT: [&str; 4] = ["c", "cc", "cpp", "cxx"];
 
+const BYPASS: [&str; 9] = [
+    "-ftime-trace",
+    "--serialize-diagnostics",
+    "-MJ",
+    "-save-temps",
+    "-fsave-optimization-record",
+    "-fprofile-use",
+    "-fprofile-sample-use",
+    "-fsanitize-ignorelist",
+    "-fsanitize-blacklist",
+];
+
 pub fn parse(rest: &[String]) -> Option<Job> {
     let mut src: Option<PathBuf> = None;
     let mut obj: Option<PathBuf> = None;
@@ -23,6 +35,7 @@ pub fn parse(rest: &[String]) -> Option<Job> {
             "-MD" | "-MMD" => want_dep = true,
             "-MF" => dep_out = Some(PathBuf::from(iter.next()?)),
             "-M" | "-MM" => return None,
+            _ if BYPASS.iter().any(|p| arg.starts_with(p)) => return None,
             _ if arg.starts_with('-') => {}
             _ => {
                 let path = PathBuf::from(arg);
@@ -98,6 +111,13 @@ mod tests {
     #[test]
     fn mf_without_md_is_skipped() {
         assert!(parse(&argv(&["-c", "a.c", "-MF", "a.d", "-o", "a.o"])).is_none());
+    }
+
+    #[test]
+    fn extra_output_flags_are_skipped() {
+        for flag in BYPASS {
+            assert!(parse(&argv(&["-c", "a.c", flag, "-o", "a.o"])).is_none());
+        }
     }
 
     #[test]
