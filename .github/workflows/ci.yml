@@ -10,9 +10,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            cc: clang
+          - os: ubuntu-latest
+            cc: gcc
+          - os: macos-latest
+            cc: clang
     runs-on: ${{ matrix.os }}
+    env:
+      BIFROST_TEST_CC: ${{ matrix.cc }}
     steps:
       - uses: actions/checkout@v4
-      - run: clang --version
+      - run: ${{ matrix.cc }} --version
       - run: cargo test --no-fail-fast

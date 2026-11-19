@@ -2,6 +2,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
+fn cc() -> String {
+    std::env::var("BIFROST_TEST_CC").unwrap_or_else(|_| "clang".to_string())
+}
+
 fn scratch(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("bifrost-diff-{}-{}", name, std::process::id()));
     let _ = fs::remove_dir_all(&dir);
@@ -11,7 +15,7 @@ fn scratch(name: &str) -> PathBuf {
 
 fn bifrost(work: &Path, cache: &Path, args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_bifrost"))
-        .arg("clang")
+        .arg(cc())
         .args(args)
         .current_dir(work)
         .env("BIFROST_DIR", cache)
@@ -21,7 +25,7 @@ fn bifrost(work: &Path, cache: &Path, args: &[&str]) -> Output {
 }
 
 fn plain(work: &Path, args: &[&str]) {
-    let st = Command::new("clang")
+    let st = Command::new(cc())
         .args(args)
         .current_dir(work)
         .status()
