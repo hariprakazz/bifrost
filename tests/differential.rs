@@ -168,3 +168,33 @@ fn depfile_target_follows_the_object_path() {
     let text = fs::read_to_string(work.join("a.d")).unwrap();
     assert!(text.starts_with("b.o:"));
 }
+
+#[test]
+fn debug_objects_do_not_leak_the_build_dir() {
+    let first = scratch("dbgone");
+    let second = scratch("dbgtwo");
+    let cache = first.join("cache");
+    for dir in [&first, &second] {
+        fs::write(dir.join("a.c"), "int a(void) { return 1; }\n").unwrap();
+    }
+    let flags = ["-g", "-c", "a.c", "-o", "a.o"];
+
+    bifrost(&first, &cache, &flags);
+    bifrost(&second, &cache, &flags);
+    plain(&second, &["-g", "-c", "a.c", "-o", "real.o"]);
+
+    assert!(same_bytes(&second, "a.o", "real.o"));
+}
+
+#[test]
+fn debug_build_in_same_dir_still_hits() {
+    let work = scratch("dbgsame");
+    let cache = work.join("cache");
+    fs::write(work.join("a.c"), "int a(void) { return 1; }\n").unwrap();
+
+    let one = bifrost(&work, &cache, &["-g", "-c", "a.c", "-o", "one.o"]);
+    let two = bifrost(&work, &cache, &["-g", "-c", "a.c", "-o", "two.o"]);
+
+    assert!(said(&one, "miss"));
+    assert!(said(&two, "hit"));
+}

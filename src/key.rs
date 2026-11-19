@@ -104,6 +104,10 @@ pub fn cache_key(compiler: &str, rest: &[String], pre: &[u8]) -> Option<String> 
         }
         feed(arg.as_bytes());
     }
+    if rest.iter().any(|a| a.starts_with("-g")) {
+        let cwd = std::env::current_dir().ok()?;
+        feed(cwd.to_string_lossy().as_bytes());
+    }
     feed(pre);
 
     Some(hasher.finalize().to_hex().to_string())
