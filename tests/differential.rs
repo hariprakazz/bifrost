@@ -154,3 +154,17 @@ fn md_without_mf_skips_the_cache() {
     assert!(!said(&first, "hit") && !said(&first, "miss"));
     assert!(work.join("a.d").is_file());
 }
+
+#[test]
+fn depfile_target_follows_the_object_path() {
+    let work = scratch("depobj");
+    let cache = work.join("cache");
+    fs::write(work.join("a.c"), "int a(void) { return 1; }\n").unwrap();
+
+    bifrost(&work, &cache, &["-c", "a.c", "-MD", "-MF", "a.d", "-o", "a.o"]);
+    let second = bifrost(&work, &cache, &["-c", "a.c", "-MD", "-MF", "a.d", "-o", "b.o"]);
+
+    assert!(said(&second, "miss"));
+    let text = fs::read_to_string(work.join("a.d")).unwrap();
+    assert!(text.starts_with("b.o:"));
+}
