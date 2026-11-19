@@ -202,3 +202,24 @@ fn debug_build_in_same_dir_still_hits() {
     assert!(said(&one, "miss"));
     assert!(said(&two, "hit"));
 }
+
+#[test]
+fn stats_counts_hits_and_misses() {
+    let work = scratch("stats");
+    let cache = work.join("cache");
+    fs::write(work.join("a.c"), "int a(void) { return 1; }\n").unwrap();
+
+    bifrost(&work, &cache, &["-c", "a.c", "-o", "one.o"]);
+    bifrost(&work, &cache, &["-c", "a.c", "-o", "two.o"]);
+    bifrost(&work, &cache, &["-c", "a.c", "-o", "three.o"]);
+
+    let out = Command::new(env!("CARGO_BIN_EXE_bifrost"))
+        .arg("--stats")
+        .env("BIFROST_DIR", &cache)
+        .output()
+        .unwrap();
+    let text = String::from_utf8_lossy(&out.stdout);
+
+    assert!(text.contains("hits: 2"));
+    assert!(text.contains("misses: 1"));
+}

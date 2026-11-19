@@ -1,5 +1,6 @@
 mod args;
 mod key;
+mod stats;
 mod store;
 
 use std::env;
@@ -27,7 +28,8 @@ fn try_cached(compiler: &str, rest: &[String]) -> Option<i32> {
     let job = args::parse(rest)?;
     let pre = key::preprocessed(compiler, rest)?;
     let id = key::cache_key(compiler, rest, &pre)?;
-    let store = Store::new(Store::default_root()?);
+    let root = Store::default_root()?;
+    let store = Store::new(root.clone());
     let dep_id = format!("{}.dep", id);
 
     if let Ok(true) = store.fetch(&id, &job.obj) {
@@ -37,11 +39,13 @@ fn try_cached(compiler: &str, rest: &[String]) -> Option<i32> {
         };
         if dep_ok {
             note("hit");
+            stats::record(&root, true);
             return Some(0);
         }
     }
 
     note("miss");
+    stats::record(&root, false);
     let code = run_real(compiler, rest);
     if code == 0 {
         let dep_saved = match &job.dep {
@@ -58,6 +62,16 @@ fn try_cached(compiler: &str, rest: &[String]) -> Option<i32> {
 
 fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
+    if args.first().map(String::as_str) == Some("--stats") {
+        let Some(root) = Store::default_root() else {
+            eprintln!("bifrost: no cache directory");
+            exit(1);
+        };
+        let (hits, misses) = stats::totals(&root);
+        println!("hits: {}\nmisses: {}", hits, misses);
+        exit(0);
+    }
+
     let Some((compiler, rest)) = args.split_first() else {
         eprintln!("usage: bifrost <compiler> [args...]");
         exit(2);
