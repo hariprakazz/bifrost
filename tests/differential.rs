@@ -106,17 +106,51 @@ fn failed_compile_is_not_cached() {
 }
 
 #[test]
-fn depfile_runs_skip_the_cache() {
+fn depfile_hit_matches_plain_compile() {
     let work = scratch("dep");
+    let refdir = scratch("depref");
+    let cache = work.join("cache");
+    for dir in [&work, &refdir] {
+        fs::write(dir.join("a.h"), "#define N 1\n").unwrap();
+        fs::write(dir.join("a.c"), "#include \"a.h\"\nint a(void) { return N; }\n").unwrap();
+    }
+    let flags = ["-c", "a.c", "-MD", "-MF", "a.d", "-o", "a.o"];
+
+    let first = bifrost(&work, &cache, &flags);
+    fs::remove_file(work.join("a.o")).unwrap();
+    fs::remove_file(work.join("a.d")).unwrap();
+    let second = bifrost(&work, &cache, &flags);
+    plain(&refdir, &flags);
+
+    assert!(said(&first, "miss"));
+    assert!(said(&second, "hit"));
+    assert_eq!(fs::read(work.join("a.o")).unwrap(), fs::read(refdir.join("a.o")).unwrap());
+    assert_eq!(fs::read(work.join("a.d")).unwrap(), fs::read(refdir.join("a.d")).unwrap());
+}
+
+#[test]
+fn depfile_target_name_is_part_of_the_key() {
+    let work = scratch("deptarget");
     let cache = work.join("cache");
     fs::write(work.join("a.c"), "int a(void) { return 1; }\n").unwrap();
 
-    let first = bifrost(&work, &cache, &["-c", "a.c", "-MD", "-MF", "a.d", "-o", "a.o"]);
-    let second = bifrost(&work, &cache, &["-c", "a.c", "-MD", "-MF", "a.d", "-o", "a.o"]);
+    bifrost(&work, &cache, &["-c", "a.c", "-MD", "-MF", "a.d", "-o", "a.o"]);
+    let second = bifrost(&work, &cache, &["-c", "a.c", "-MD", "-MF", "b.d", "-o", "b.o"]);
+
+    assert!(said(&second, "miss"));
+    let text = fs::read_to_string(work.join("b.d")).unwrap();
+    assert!(text.starts_with("b.o:"));
+}
+
+#[test]
+fn md_without_mf_skips_the_cache() {
+    let work = scratch("depskip");
+    let cache = work.join("cache");
+    fs::write(work.join("a.c"), "int a(void) { return 1; }\n").unwrap();
+
+    let first = bifrost(&work, &cache, &["-c", "a.c", "-MD", "-o", "a.o"]);
 
     assert!(first.status.success());
-    assert!(second.status.success());
     assert!(!said(&first, "hit") && !said(&first, "miss"));
-    assert!(!said(&second, "hit") && !said(&second, "miss"));
     assert!(work.join("a.d").is_file());
 }

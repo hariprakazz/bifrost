@@ -95,9 +95,10 @@ pub fn cache_key(compiler: &str, rest: &[String], pre: &[u8]) -> Option<String> 
     };
 
     feed(&ver);
+    let with_dep = rest.iter().any(|a| a == "-MD" || a == "-MMD");
     let mut iter = rest.iter();
     while let Some(arg) = iter.next() {
-        if arg == "-o" {
+        if arg == "-o" && !with_dep {
             iter.next();
             continue;
         }

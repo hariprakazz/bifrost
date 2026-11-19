@@ -17,11 +17,6 @@ fn run_real(compiler: &str, rest: &[String]) -> i32 {
     }
 }
 
-fn wants_depfile(rest: &[String]) -> bool {
-    rest.iter()
-        .any(|a| matches!(a.as_str(), "-MD" | "-MMD" | "-MF" | "-M" | "-MM"))
-}
-
 fn note(msg: &str) {
     if env::var_os("BIFROST_LOG").is_some() {
         eprintln!("bifrost: {}", msg);
@@ -29,23 +24,32 @@ fn note(msg: &str) {
 }
 
 fn try_cached(compiler: &str, rest: &[String]) -> Option<i32> {
-    if wants_depfile(rest) {
-        return None;
-    }
     let job = args::parse(rest)?;
     let pre = key::preprocessed(compiler, rest)?;
     let id = key::cache_key(compiler, rest, &pre)?;
     let store = Store::new(Store::default_root()?);
+    let dep_id = format!("{}.dep", id);
 
     if let Ok(true) = store.fetch(&id, &job.obj) {
-        note("hit");
-        return Some(0);
+        let dep_ok = match &job.dep {
+            Some(dep) => matches!(store.fetch(&dep_id, dep), Ok(true)),
+            None => true,
+        };
+        if dep_ok {
+            note("hit");
+            return Some(0);
+        }
     }
 
     note("miss");
     let code = run_real(compiler, rest);
     if code == 0 {
-        if let Err(err) = store.put(&id, &job.obj) {
+        let dep_saved = match &job.dep {
+            Some(dep) => store.put(&dep_id, dep),
+            None => Ok(()),
+        };
+        let saved = dep_saved.and_then(|_| store.put(&id, &job.obj));
+        if let Err(err) = saved {
             eprintln!("bifrost: cache write failed: {}", err);
         }
     }
