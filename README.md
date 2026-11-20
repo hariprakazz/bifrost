@@ -30,7 +30,7 @@ Tests compare bifrost against the plain compiler byte for byte, covering hits, h
 
 ## Limits
 
-Warnings are not replayed on a hit, there is no cache size limit, and several cases are untested (precompiled headers, `__TIME__`, environment variables). The full list and the cache key are in [DESIGN.md](DESIGN.md).
+Warnings are not replayed on a hit, there is no cache size limit, and several cases are untested (precompiled headers, `__TIME__`, environment variables beyond the macOS deployment ones). The full list and the cache key are in [DESIGN.md](DESIGN.md).
 
 ## Stack
 
