@@ -21,6 +21,7 @@ pub fn preprocessed(compiler: &str, rest: &[String]) -> Option<Vec<u8>> {
     Some(out.stdout)
 }
 
+#[cfg(test)]
 pub fn digest(pre: &[u8]) -> String {
     blake3::hash(pre).to_hex().to_string()
 }

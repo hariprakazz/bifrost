@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 
 pub struct Job {
-    pub src: PathBuf,
     pub obj: PathBuf,
     pub dep: Option<PathBuf>,
 }
@@ -60,7 +59,10 @@ pub fn parse(rest: &[String]) -> Option<Job> {
     if want_dep != dep_out.is_some() {
         return None;
     }
-    Some(Job { src: src?, obj: obj?, dep: dep_out })
+    if src.is_none() {
+        return None;
+    }
+    Some(Job { obj: obj?, dep: dep_out })
 }
 
 #[cfg(test)]
@@ -74,7 +76,6 @@ mod tests {
     #[test]
     fn plain_compile() {
         let job = parse(&argv(&["-c", "foo.c", "-o", "foo.o"])).unwrap();
-        assert_eq!(job.src, PathBuf::from("foo.c"));
         assert_eq!(job.obj, PathBuf::from("foo.o"));
         assert!(job.dep.is_none());
     }
@@ -82,7 +83,6 @@ mod tests {
     #[test]
     fn flags_in_between() {
         let job = parse(&argv(&["-O2", "-Iinc", "-c", "a.cpp", "-DX=1", "-o", "out/a.o"])).unwrap();
-        assert_eq!(job.src, PathBuf::from("a.cpp"));
         assert_eq!(job.obj, PathBuf::from("out/a.o"));
     }
 
