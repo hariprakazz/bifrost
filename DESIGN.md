@@ -16,7 +16,7 @@ BLAKE3 over length-prefixed parts, so `-O 2` and `-O2` cannot collide:
 
 - the compiler's `--version` output
 - every argument except the `-o` pair
-- the `-o` path as well, when a depfile is requested (the depfile names its target)
+- the `-o` path as well, when a depfile is requested (the depfile names its target). Without `-MF` the depfile path is the `-o` path with a `.d` extension
 - the working directory, when any argument starts with `-g`
 - the preprocessed source
 
@@ -29,7 +29,7 @@ Objects live at `<root>/<first two hex digits>/<key>`, with the depfile beside i
 ## What always bypasses the cache
 
 - link steps, several sources, a missing `-o`
-- `-M` and `-MM`, `-MD` without `-MF`, `-MF` without `-MD`
+- `-M` and `-MM`, and `-MF` without `-MD` or `-MMD`
 - flags that write extra files: `-ftime-trace`, `--serialize-diagnostics`, `-MJ`, `-save-temps`, `-fsave-optimization-record`
 - flags that read files the preprocessor does not see: `-fprofile-use`, `-fprofile-sample-use`, `-fsanitize-ignorelist`
 - coverage and profile output: `--coverage`, `-fprofile-arcs`, `-ftest-coverage`, `-fprofile-generate`

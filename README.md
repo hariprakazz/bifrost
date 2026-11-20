@@ -12,7 +12,7 @@ Set `BIFROST_DIR` to move the cache (default `~/.cache/bifrost`) and `BIFROST_LO
 
 ## Status
 
-Local cache only. Plain compiles with `-c` and `-o` are cached, including `-MD -MF` depfiles. Everything else runs the real compiler untouched. Remote caching and trace analysis are not started.
+Local cache only. Plain compiles with `-c` and `-o` are cached, including depfiles from `-MD` and `-MMD`. Everything else runs the real compiler untouched. Remote caching and trace analysis are not started.
 
 ## Numbers
 
