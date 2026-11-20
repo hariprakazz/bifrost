@@ -262,3 +262,20 @@ fn file_macro_matches_plain_compile() {
 
     assert_eq!(fs::read(work.join("a.o")).unwrap(), fs::read(refdir.join("a.o")).unwrap());
 }
+
+#[test]
+fn response_file_contents_are_part_of_the_key() {
+    let work = scratch("rsp");
+    let cache = work.join("cache");
+    fs::write(work.join("a.c"), "int a(int x) { return x * 2 + x * 2; }\n").unwrap();
+
+    fs::write(work.join("flags.rsp"), "-O0\n").unwrap();
+    bifrost(&work, &cache, &["-c", "a.c", "-o", "slow.o", "@flags.rsp"]);
+
+    fs::write(work.join("flags.rsp"), "-O2\n").unwrap();
+    let fast = bifrost(&work, &cache, &["-c", "a.c", "-o", "fast.o", "@flags.rsp"]);
+    plain(&work, &["-c", "a.c", "-o", "real_fast.o", "@flags.rsp"]);
+
+    assert!(said(&fast, "miss"));
+    assert!(same_bytes(&work, "fast.o", "real_fast.o"));
+}

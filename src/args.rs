@@ -1,3 +1,4 @@
+use std::fs;
 use std::path::PathBuf;
 
 pub struct Job {
@@ -22,6 +23,22 @@ const BYPASS: [&str; 13] = [
     "-ftest-coverage",
     "-fprofile-generate",
 ];
+
+pub fn expand(rest: &[String]) -> Option<Vec<String>> {
+    let mut out: Vec<String> = Vec::new();
+    for arg in rest {
+        let Some(path) = arg.strip_prefix('@').filter(|p| !p.is_empty()) else {
+            out.push(arg.clone());
+            continue;
+        };
+        let text = fs::read_to_string(path).ok()?;
+        if text.contains(['"', '\'', '\\', '@']) {
+            return None;
+        }
+        out.extend(text.split_whitespace().map(String::from));
+    }
+    Some(out)
+}
 
 pub fn parse(rest: &[String]) -> Option<Job> {
     let mut src: Option<PathBuf> = None;
@@ -129,6 +146,29 @@ mod tests {
         for flag in ["--coverage", "-fprofile-arcs", "-ftest-coverage", "-fprofile-generate"] {
             assert!(parse(&argv(&["-c", "a.c", flag, "-o", "a.o"])).is_none());
         }
+    }
+
+    #[test]
+    fn response_file_is_expanded() {
+        let dir = std::env::temp_dir().join(format!("bifrost-rsp-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let rsp = dir.join("f.rsp");
+        fs::write(&rsp, "-O2 -DX=1\n").unwrap();
+        let got = expand(&argv(&["-c", &format!("@{}", rsp.display())])).unwrap();
+        assert_eq!(got, argv(&["-c", "-O2", "-DX=1"]));
+    }
+
+    #[test]
+    fn tricky_response_files_are_skipped() {
+        let dir = std::env::temp_dir().join(format!("bifrost-rsp2-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let quoted = dir.join("q.rsp");
+        let nested = dir.join("n.rsp");
+        fs::write(&quoted, "-DX=\"a b\"\n").unwrap();
+        fs::write(&nested, "@other.rsp\n").unwrap();
+        assert!(expand(&argv(&[&format!("@{}", quoted.display())])).is_none());
+        assert!(expand(&argv(&[&format!("@{}", nested.display())])).is_none());
+        assert!(expand(&argv(&["@/no/such/file.rsp"])).is_none());
     }
 
     #[test]

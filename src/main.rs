@@ -25,9 +25,10 @@ fn note(msg: &str) {
 }
 
 fn try_cached(compiler: &str, rest: &[String]) -> Option<i32> {
-    let job = args::parse(rest)?;
-    let pre = key::preprocessed(compiler, rest)?;
-    let id = key::cache_key(compiler, rest, &pre)?;
+    let flat = args::expand(rest)?;
+    let job = args::parse(&flat)?;
+    let pre = key::preprocessed(compiler, &flat)?;
+    let id = key::cache_key(compiler, &flat, &pre)?;
     let root = Store::default_root()?;
     let store = Store::new(root.clone());
     let dep_id = format!("{}.dep", id);
