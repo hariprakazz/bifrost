@@ -223,3 +223,42 @@ fn stats_counts_hits_and_misses() {
     assert!(text.contains("hits: 2"));
     assert!(text.contains("misses: 1"));
 }
+
+#[test]
+fn miss_keeps_compiler_warnings() {
+    let work = scratch("warn");
+    let cache = work.join("cache");
+    fs::write(work.join("a.c"), "int a(void) { int unused; return 1; }\n").unwrap();
+    let flags = ["-Wall", "-c", "a.c", "-o", "a.o"];
+
+    let via_cache = bifrost(&work, &cache, &flags);
+    let direct = Command::new(cc()).args(flags).current_dir(&work).output().unwrap();
+
+    let got: Vec<String> = String::from_utf8_lossy(&via_cache.stderr)
+        .lines()
+        .filter(|l| !l.starts_with("bifrost:"))
+        .map(|l| l.to_string())
+        .collect();
+    let want: Vec<String> = String::from_utf8_lossy(&direct.stderr)
+        .lines()
+        .map(|l| l.to_string())
+        .collect();
+
+    assert!(!want.is_empty());
+    assert_eq!(got, want);
+}
+
+#[test]
+fn file_macro_matches_plain_compile() {
+    let work = scratch("filemacro");
+    let refdir = scratch("filemacroref");
+    let cache = work.join("cache");
+    for dir in [&work, &refdir] {
+        fs::write(dir.join("a.c"), "const char *f(void) { return __FILE__; }\n").unwrap();
+    }
+
+    bifrost(&work, &cache, &["-c", "a.c", "-o", "a.o"]);
+    plain(&refdir, &["-c", "a.c", "-o", "a.o"]);
+
+    assert_eq!(fs::read(work.join("a.o")).unwrap(), fs::read(refdir.join("a.o")).unwrap());
+}
