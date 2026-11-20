@@ -1,42 +1,37 @@
 # bifrost
-A compiler cache for C and C++.
 
-Bifrost is a Rust project I'm building to avoid recompiling the same code unnecessarily. The idea is to identify compilation inputs by their content, cache the resulting object files, and reuse them when the inputs haven't changed.
+A compiler cache for C and C++, written in Rust. It wraps clang or gcc, hashes everything a compile depends on, and reuses the object file when nothing changed.
 
-I'm also exploring remote caching and compiler trace analysis, with the goal of making builds faster and easier to debug.
+## Usage
 
-How it works
+    cargo build --release
+    make CC="target/release/bifrost clang"
+    target/release/bifrost --stats
 
-The plan is to build Bifrost around four main parts:
+Set `BIFROST_DIR` to move the cache (default `~/.cache/bifrost`) and `BIFROST_LOG=1` to see hit and miss lines.
 
-Compiler wrapper: Intercept GCC and Clang invocations and parse their arguments.
+## Status
 
-Content hashing: Use BLAKE3 to identify compilation inputs and generate cache keys.
+Local cache only. Plain compiles with `-c` and `-o` are cached, including `-MD -MF` depfiles. Everything else runs the real compiler untouched. Remote caching and trace analysis are not started.
 
-Local cache: Store compiled artifacts and reuse them when a matching cache entry exists.
+## Numbers
 
-Remote cache and traces: Explore sharing cached artifacts across machines and collecting compiler timing information.
+Lua 5.4.7, Apple clang, median of 5 runs, `make -j` on all cores:
 
-Cache correctness is the main challenge. A cached object file is only useful if the inputs that affect compilation match.
+| plain | cold cache | warm cache |
+|-------|-----------|-----------|
+| 0.46s | 0.61s | 0.31s |
 
-Tech stack
+A cold build is slower than no cache, because every miss preprocesses the file twice. Lua is a small project, so treat this as a first measurement. Reproduce it with `bench/lua.sh`.
 
-Rust · BLAKE3 · Tokio · GCC/Clang · gRPC (tonic)
+## Correctness
 
-Status
+Tests compare bifrost against the plain compiler byte for byte, covering hits, header changes, optimisation flags, depfiles, debug builds in different directories, and response files. CI runs them on Ubuntu with clang and gcc, and on macOS with clang. The unit tests call clang only.
 
-Currently in the initial setup and design stage. The features above describe the intended direction, not a claim that everything is implemented.
+## Limits
 
-What's next
+Warnings are not replayed on a hit, there is no cache size limit, and several cases are untested (precompiled headers, `__TIME__`, environment variables). The full list and the cache key are in [DESIGN.md](DESIGN.md).
 
-Get the compiler wrapper working with GCC and Clang.
+## Stack
 
-Figure out which compiler arguments and files need to be part of the cache key.
-
-Get a basic local cache working and verify that cache hits produce the same output as a normal compilation.
-
-Test what happens when headers, compiler flags, or source files change.
-
-Run a few real projects through Bifrost and compare build times with caching enabled and disabled.
-
-Look into remote caching once the local implementation is reliable.
+Rust and BLAKE3.
