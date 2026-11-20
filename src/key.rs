@@ -87,6 +87,12 @@ fn compiler_version(compiler: &str) -> Option<Vec<u8>> {
     Some(out.stdout)
 }
 
+const ENV_KEYS: [&str; 3] = [
+    "MACOSX_DEPLOYMENT_TARGET",
+    "IPHONEOS_DEPLOYMENT_TARGET",
+    "SDKROOT",
+];
+
 pub fn cache_key(compiler: &str, rest: &[String], pre: &[u8]) -> Option<String> {
     let ver = compiler_version(compiler)?;
     let mut hasher = blake3::Hasher::new();
@@ -108,6 +114,10 @@ pub fn cache_key(compiler: &str, rest: &[String], pre: &[u8]) -> Option<String> 
     if rest.iter().any(|a| a.starts_with("-g")) {
         let cwd = std::env::current_dir().ok()?;
         feed(cwd.to_string_lossy().as_bytes());
+    }
+    for name in ENV_KEYS {
+        let val = std::env::var(name).unwrap_or_default();
+        feed(format!("{}={}", name, val).as_bytes());
     }
     feed(pre);
 

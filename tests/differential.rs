@@ -289,3 +289,65 @@ fn mmd_without_mf_hits_and_matches_plain() {
     assert_eq!(fs::read(work.join("a.o")).unwrap(), fs::read(refdir.join("a.o")).unwrap());
     assert_eq!(fs::read(work.join("a.d")).unwrap(), fs::read(refdir.join("a.d")).unwrap());
 }
+
+#[test]
+fn deployment_target_env_changes_the_object() {
+    if !cfg!(target_os = "macos") {
+        return;
+    }
+    let work = scratch("envtarget");
+    let cache = work.join("cache");
+    fs::write(work.join("a.c"), "int a(void) { return 1; }\n").unwrap();
+
+    let run = |target: &str, out: &str| {
+        Command::new(env!("CARGO_BIN_EXE_bifrost"))
+            .arg(cc())
+            .args(["-c", "a.c", "-o", out])
+            .current_dir(&work)
+            .env("BIFROST_DIR", &cache)
+            .env("BIFROST_LOG", "1")
+            .env("MACOSX_DEPLOYMENT_TARGET", target)
+            .output()
+            .unwrap()
+    };
+    let first = run("11.0", "first.o");
+    let second = run("14.0", "second.o");
+    let real = Command::new(cc())
+        .args(["-c", "a.c", "-o", "real.o"])
+        .current_dir(&work)
+        .env("MACOSX_DEPLOYMENT_TARGET", "14.0")
+        .status()
+        .unwrap();
+
+    assert!(real.success());
+    assert!(said(&first, "miss"));
+    assert!(said(&second, "miss"));
+    assert!(same_bytes(&work, "second.o", "real.o"));
+}
+
+#[test]
+fn same_deployment_target_still_hits() {
+    if !cfg!(target_os = "macos") {
+        return;
+    }
+    let work = scratch("envsame");
+    let cache = work.join("cache");
+    fs::write(work.join("a.c"), "int a(void) { return 1; }\n").unwrap();
+
+    let run = |out: &str| {
+        Command::new(env!("CARGO_BIN_EXE_bifrost"))
+            .arg(cc())
+            .args(["-c", "a.c", "-o", out])
+            .current_dir(&work)
+            .env("BIFROST_DIR", &cache)
+            .env("BIFROST_LOG", "1")
+            .env("MACOSX_DEPLOYMENT_TARGET", "14.0")
+            .output()
+            .unwrap()
+    };
+    let first = run("one.o");
+    let second = run("two.o");
+
+    assert!(said(&first, "miss"));
+    assert!(said(&second, "hit"));
+}
