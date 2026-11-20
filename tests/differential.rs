@@ -147,19 +147,6 @@ fn depfile_target_name_is_part_of_the_key() {
 }
 
 #[test]
-fn md_without_mf_skips_the_cache() {
-    let work = scratch("depskip");
-    let cache = work.join("cache");
-    fs::write(work.join("a.c"), "int a(void) { return 1; }\n").unwrap();
-
-    let first = bifrost(&work, &cache, &["-c", "a.c", "-MD", "-o", "a.o"]);
-
-    assert!(first.status.success());
-    assert!(!said(&first, "hit") && !said(&first, "miss"));
-    assert!(work.join("a.d").is_file());
-}
-
-#[test]
 fn depfile_target_follows_the_object_path() {
     let work = scratch("depobj");
     let cache = work.join("cache");
@@ -278,4 +265,27 @@ fn response_file_contents_are_part_of_the_key() {
 
     assert!(said(&fast, "miss"));
     assert!(same_bytes(&work, "fast.o", "real_fast.o"));
+}
+
+#[test]
+fn mmd_without_mf_hits_and_matches_plain() {
+    let work = scratch("mmd");
+    let refdir = scratch("mmdref");
+    let cache = work.join("cache");
+    for dir in [&work, &refdir] {
+        fs::write(dir.join("a.h"), "#define N 1\n").unwrap();
+        fs::write(dir.join("a.c"), "#include \"a.h\"\nint a(void) { return N; }\n").unwrap();
+    }
+    let flags = ["-c", "a.c", "-MMD", "-o", "a.o"];
+
+    let first = bifrost(&work, &cache, &flags);
+    fs::remove_file(work.join("a.o")).unwrap();
+    fs::remove_file(work.join("a.d")).unwrap();
+    let second = bifrost(&work, &cache, &flags);
+    plain(&refdir, &flags);
+
+    assert!(said(&first, "miss"));
+    assert!(said(&second, "hit"));
+    assert_eq!(fs::read(work.join("a.o")).unwrap(), fs::read(refdir.join("a.o")).unwrap());
+    assert_eq!(fs::read(work.join("a.d")).unwrap(), fs::read(refdir.join("a.d")).unwrap());
 }

@@ -73,13 +73,17 @@ pub fn parse(rest: &[String]) -> Option<Job> {
     if !compile_only {
         return None;
     }
-    if want_dep != dep_out.is_some() {
+    if dep_out.is_some() && !want_dep {
         return None;
     }
     if src.is_none() {
         return None;
     }
-    Some(Job { obj: obj?, dep: dep_out })
+    let obj = obj?;
+    if want_dep && dep_out.is_none() {
+        dep_out = Some(obj.with_extension("d"));
+    }
+    Some(Job { obj, dep: dep_out })
 }
 
 #[cfg(test)]
@@ -125,8 +129,9 @@ mod tests {
     }
 
     #[test]
-    fn md_without_mf_is_skipped() {
-        assert!(parse(&argv(&["-c", "a.c", "-MD", "-o", "a.o"])).is_none());
+    fn md_without_mf_derives_the_depfile_path() {
+        let job = parse(&argv(&["-c", "a.c", "-MMD", "-o", "out/a.o"])).unwrap();
+        assert_eq!(job.dep, Some(PathBuf::from("out/a.d")));
     }
 
     #[test]
