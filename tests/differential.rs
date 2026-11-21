@@ -448,3 +448,18 @@ fn parallel_runs_agree_with_plain_compile() {
         }
     }
 }
+
+#[test]
+fn time_macro_is_never_served_stale() {
+    let work = scratch("timemacro");
+    let cache = work.join("cache");
+    fs::write(work.join("a.c"), "const char *t(void) { return __TIME__; }\n").unwrap();
+    let flags = ["-c", "a.c", "-o", "a.o"];
+
+    let first = bifrost(&work, &cache, &flags);
+    std::thread::sleep(std::time::Duration::from_millis(1100));
+    let second = bifrost(&work, &cache, &flags);
+
+    assert!(said(&first, "miss"));
+    assert!(said(&second, "miss"));
+}
