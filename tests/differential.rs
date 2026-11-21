@@ -486,3 +486,28 @@ fn pch_contents_are_part_of_the_result() {
 
     assert!(same_bytes(&work, "cached.o", "out.o"));
 }
+
+#[test]
+fn zero_limit_keeps_nothing() {
+    let work = scratch("limit");
+    let cache = work.join("cache");
+    fs::write(work.join("a.c"), "int a(void) { return 1; }\n").unwrap();
+
+    let run = |out: &str| {
+        Command::new(env!("CARGO_BIN_EXE_bifrost"))
+            .arg(cc())
+            .args(["-c", "a.c", "-o", out])
+            .current_dir(&work)
+            .env("BIFROST_DIR", &cache)
+            .env("BIFROST_LOG", "1")
+            .env("BIFROST_MAX_MB", "0")
+            .output()
+            .unwrap()
+    };
+    let first = run("one.o");
+    let second = run("two.o");
+
+    assert!(said(&first, "miss"));
+    assert!(said(&second, "miss"));
+    assert!(work.join("two.o").is_file());
+}

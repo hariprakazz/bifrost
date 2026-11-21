@@ -31,7 +31,7 @@ Tests compare bifrost against the plain compiler byte for byte, covering hits, h
 
 ## Limits
 
-There is no cache size limit, a miss loses coloured diagnostics in a terminal, and several cases are untested (precompiled headers, `__TIME__`, environment variables beyond the macOS deployment ones). The full list and the cache key are in [DESIGN.md](DESIGN.md).
+The cache is capped at 5 GiB by default (`BIFROST_MAX_MB` changes it), a miss loses coloured diagnostics in a terminal, and several cases are untested (`__DATE__`, GCC precompiled headers, environment variables beyond the macOS deployment ones). The full list and the cache key are in [DESIGN.md](DESIGN.md).
 
 ## Stack
 

@@ -49,6 +49,6 @@ Differential tests run Bifrost and the plain compiler on the same input and comp
 - Other environment variables are not part of the key. Ones that change include paths show up in the preprocessed text, but nothing else has been checked.
 - `__TIME__` ends up in the preprocessed text, so a file using it gets a new key whenever the second changes, and a test checks this. `__DATE__` works the same way but is not tested.
 - Precompiled headers are not handled specially. One clang test (`-include-pch`) gave the same bytes as a plain compile after the header changed. GCC `.gch` files and other PCH uses are untested.
-- There is no size limit or eviction. The cache only grows.
+- After a miss that stores something, the cache is trimmed to 90% of a size limit (5 GiB, or `BIFROST_MAX_MB`), deleting the least recently used files first. This walks the whole cache directory on every miss, which is untested at large sizes. Unit tests cover the ordering and the dotfile rule, and one differential test checks that a zero limit keeps nothing.
 - Compiles that bypass the cache are not counted in `--stats`.
 - Concurrent bifrost processes are only smoke tested. The parallel compile test cannot catch a store race, because every process looks up the cache before any of them writes.

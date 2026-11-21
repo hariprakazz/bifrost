@@ -4,6 +4,12 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
+fn touch(path: &Path) {
+    if let Ok(file) = fs::OpenOptions::new().write(true).open(path) {
+        let _ = file.set_modified(SystemTime::now());
+    }
+}
+
 pub struct Store {
     root: PathBuf,
 }
@@ -41,11 +47,61 @@ impl Store {
             return Err(err);
         }
         fs::rename(&tmp, dest)?;
+        touch(&slot);
         Ok(true)
     }
 
+    pub fn limit_bytes() -> u64 {
+        let mb = env::var("BIFROST_MAX_MB")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(5120);
+        mb * 1024 * 1024
+    }
+
+    pub fn trim(&self, limit: u64) {
+        let Ok(shards) = fs::read_dir(&self.root) else {
+            return;
+        };
+        let mut files: Vec<(SystemTime, u64, PathBuf)> = Vec::new();
+        let mut total: u64 = 0;
+        for shard in shards.flatten() {
+            if !shard.path().is_dir() {
+                continue;
+            }
+            let Ok(entries) = fs::read_dir(shard.path()) else {
+                continue;
+            };
+            for entry in entries.flatten() {
+                if entry.file_name().to_string_lossy().starts_with('.') {
+                    continue;
+                }
+                let Ok(meta) = entry.metadata() else { continue };
+                let Ok(stamp) = meta.modified() else { continue };
+                total += meta.len();
+                files.push((stamp, meta.len(), entry.path()));
+            }
+        }
+        if total <= limit {
+            return;
+        }
+        files.sort();
+        let target = limit / 10 * 9;
+        for (_, size, path) in files {
+            if total <= target {
+                break;
+            }
+            if fs::remove_file(&path).is_ok() {
+                total -= size;
+            }
+        }
+    }
+
     pub fn read_bytes(&self, key: &str) -> Option<Vec<u8>> {
-        fs::read(self.slot(key)).ok()
+        let slot = self.slot(key);
+        let data = fs::read(&slot).ok()?;
+        touch(&slot);
+        Some(data)
     }
 
     pub fn write_bytes(&self, key: &str, data: &[u8]) -> io::Result<()> {
@@ -177,5 +233,80 @@ mod race_tests {
         }
         writer.join().unwrap();
         assert!(seen > 0);
+    }
+}
+
+#[cfg(test)]
+mod trim_tests {
+    use super::*;
+    use std::time::Duration;
+
+    fn scratch(name: &str) -> PathBuf {
+        let dir = env::temp_dir().join(format!("bifrost-trim-{}-{}", name, std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn age(path: &Path, secs: u64) {
+        let file = fs::OpenOptions::new().write(true).open(path).unwrap();
+        file.set_modified(SystemTime::now() - Duration::from_secs(secs)).unwrap();
+    }
+
+    fn seed(store: &Store, dir: &Path, key: &str, size: usize) {
+        let obj = dir.join("seed.o");
+        fs::write(&obj, vec![1u8; size]).unwrap();
+        store.put(key, &obj).unwrap();
+    }
+
+    #[test]
+    fn oldest_goes_first() {
+        let dir = scratch("order");
+        let store = Store::new(dir.join("cache"));
+        seed(&store, &dir, "aa-old", 1000);
+        seed(&store, &dir, "bb-mid", 1000);
+        seed(&store, &dir, "cc-new", 1000);
+        age(&store.slot("aa-old"), 300);
+        age(&store.slot("bb-mid"), 200);
+        age(&store.slot("cc-new"), 100);
+        store.trim(2500);
+        assert!(!store.slot("aa-old").exists());
+        assert!(store.slot("bb-mid").exists());
+        assert!(store.slot("cc-new").exists());
+    }
+
+    #[test]
+    fn under_the_limit_nothing_goes() {
+        let dir = scratch("under");
+        let store = Store::new(dir.join("cache"));
+        seed(&store, &dir, "aa-old", 1000);
+        seed(&store, &dir, "bb-mid", 1000);
+        store.trim(5000);
+        assert!(store.slot("aa-old").exists());
+        assert!(store.slot("bb-mid").exists());
+    }
+
+    #[test]
+    fn temp_files_are_left_alone() {
+        let dir = scratch("stray");
+        let store = Store::new(dir.join("cache"));
+        seed(&store, &dir, "aa-old", 1000);
+        let stray = store.slot("aa-old").parent().unwrap().join(".aa-old.999");
+        fs::write(&stray, vec![0u8; 5000]).unwrap();
+        store.trim(1500);
+        assert!(store.slot("aa-old").exists());
+        assert!(stray.exists());
+    }
+
+    #[test]
+    fn fetch_refreshes_the_age() {
+        let dir = scratch("touch");
+        let store = Store::new(dir.join("cache"));
+        seed(&store, &dir, "aa-old", 1000);
+        age(&store.slot("aa-old"), 3600);
+        let before = fs::metadata(store.slot("aa-old")).unwrap().modified().unwrap();
+        store.fetch("aa-old", &dir.join("out.o")).unwrap();
+        let after = fs::metadata(store.slot("aa-old")).unwrap().modified().unwrap();
+        assert!(after > before + Duration::from_secs(1800));
     }
 }

@@ -78,6 +78,7 @@ fn try_cached(compiler: &str, rest: &[String]) -> Option<i32> {
         if let Err(err) = saved {
             eprintln!("bifrost: cache write failed: {}", err);
         }
+        store.trim(Store::limit_bytes());
     }
     Some(code)
 }
