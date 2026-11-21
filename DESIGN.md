@@ -47,7 +47,7 @@ Differential tests run Bifrost and the plain compiler on the same input and comp
 - `-g` builds do not share entries across directories.
 - The compiler is identified by its `--version` text only, not by a hash of the binary.
 - Other environment variables are not part of the key. Ones that change include paths show up in the preprocessed text, but nothing else has been checked.
-- `__DATE__` and `__TIME__` end up in the preprocessed text, so such files should never hit. This is not tested.
+- `__TIME__` ends up in the preprocessed text, so a file using it gets a new key whenever the second changes, and a test checks this. `__DATE__` works the same way but is not tested.
 - Precompiled headers are not supported and not tested.
 - There is no size limit or eviction. The cache only grows.
 - Compiles that bypass the cache are not counted in `--stats`.
