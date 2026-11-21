@@ -25,7 +25,7 @@ The key is deliberately wider than strictly needed. A wider key costs extra miss
 
 ## Storage
 
-Objects live at `<root>/<first two hex digits>/<key>`, with the depfile beside it as `<key>.dep` and the compiler's stderr as `<key>.err`. The root is `BIFROST_DIR`, else `~/.cache/bifrost`. Writes and reads go through a temp file plus rename, so a crash cannot leave a half-written object that looks like a hit. Hits and misses are appended to `events.log` one line each, which is what `bifrost --stats` counts.
+Objects live at `<root>/<first two hex digits>/<key>`, with the depfile beside it as `<key>.dep` and the compiler's stderr as `<key>.err`. The root is `BIFROST_DIR`, else `~/.cache/bifrost`. Writes and reads go through a temp file plus rename, so a crash cannot leave a half-written object that looks like a hit, and a unit test checks that a reader never sees a partial object. A restored file gets the current modification time, because a copy that kept the cached file's old time made build tools see an object older than its source. Hits and misses are appended to `events.log` one line each, which is what `bifrost --stats` counts.
 
 ## What always bypasses the cache
 
@@ -51,3 +51,4 @@ Differential tests run Bifrost and the plain compiler on the same input and comp
 - Precompiled headers are not supported and not tested.
 - There is no size limit or eviction. The cache only grows.
 - Compiles that bypass the cache are not counted in `--stats`.
+- Concurrent bifrost processes are only smoke tested. The parallel compile test cannot catch a store race, because every process looks up the cache before any of them writes.
