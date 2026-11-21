@@ -25,7 +25,7 @@ The key is deliberately wider than strictly needed. A wider key costs extra miss
 
 ## Storage
 
-Objects live at `<root>/<first two hex digits>/<key>`, with the depfile beside it as `<key>.dep`. The root is `BIFROST_DIR`, else `~/.cache/bifrost`. Writes and reads go through a temp file plus rename, so a crash cannot leave a half-written object that looks like a hit. Hits and misses are appended to `events.log` one line each, which is what `bifrost --stats` counts.
+Objects live at `<root>/<first two hex digits>/<key>`, with the depfile beside it as `<key>.dep` and the compiler's stderr as `<key>.err`. The root is `BIFROST_DIR`, else `~/.cache/bifrost`. Writes and reads go through a temp file plus rename, so a crash cannot leave a half-written object that looks like a hit. Hits and misses are appended to `events.log` one line each, which is what `bifrost --stats` counts.
 
 ## What always bypasses the cache
 
@@ -42,7 +42,7 @@ Differential tests run Bifrost and the plain compiler on the same input and comp
 
 ## Known limits
 
-- A hit does not replay the compiler's warnings, because stderr is not stored.
+- Compiler stderr is captured through a pipe on a miss, so clang drops coloured diagnostics there unless `-fcolor-diagnostics` is passed. Build tools already pipe the output, so builds are unaffected.
 - A miss preprocesses the file twice. On Lua 5.4.7 (Apple clang, 5 runs, medians) a cold build was about 30% slower than a plain build and a warm build about 33% faster. Compiling the preprocessed text instead changes `-g` objects and warning snippets, so it is not done.
 - `-g` builds do not share entries across directories.
 - The compiler is identified by its `--version` text only, not by a hash of the binary.
