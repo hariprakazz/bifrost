@@ -463,3 +463,26 @@ fn time_macro_is_never_served_stale() {
     assert!(said(&first, "miss"));
     assert!(said(&second, "miss"));
 }
+
+#[test]
+fn pch_contents_are_part_of_the_result() {
+    if cc() != "clang" {
+        return;
+    }
+    let work = scratch("pch");
+    let cache = work.join("cache");
+    fs::write(work.join("a.c"), "int a(void) { return N; }\n").unwrap();
+    let flags = ["-include-pch", "a.pch", "-c", "a.c", "-o", "out.o"];
+
+    fs::write(work.join("a.h"), "#define N 1\n").unwrap();
+    plain(&work, &["-x", "c-header", "a.h", "-o", "a.pch"]);
+    bifrost(&work, &cache, &flags);
+
+    fs::write(work.join("a.h"), "#define N 2\n").unwrap();
+    plain(&work, &["-x", "c-header", "a.h", "-o", "a.pch"]);
+    bifrost(&work, &cache, &flags);
+    fs::rename(work.join("out.o"), work.join("cached.o")).unwrap();
+    plain(&work, &flags);
+
+    assert!(same_bytes(&work, "cached.o", "out.o"));
+}
