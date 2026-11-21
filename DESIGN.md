@@ -15,6 +15,7 @@ Anything Bifrost does not understand or cannot do safely runs the real compiler 
 BLAKE3 over length-prefixed parts, so `-O 2` and `-O2` cannot collide:
 
 - the compiler's `--version` output
+- when that output has an `InstalledDir:` line (clang does), the path, size and modification time of the file with the compiler's own name in that directory. This is the real binary behind a shim such as `/usr/bin/clang` on macOS
 - every argument except the `-o` pair
 - the `-o` path as well, when a depfile is requested (the depfile names its target). Without `-MF` the depfile path is the `-o` path with a `.d` extension
 - the working directory, when any argument starts with `-g`
@@ -45,7 +46,7 @@ Differential tests run Bifrost and the plain compiler on the same input and comp
 - Compiler stderr is captured through a pipe on a miss, so clang drops coloured diagnostics there unless `-fcolor-diagnostics` is passed. Build tools already pipe the output, so builds are unaffected.
 - A miss preprocesses the file twice. On Lua 5.4.7 (Apple clang, 5 runs, medians) a cold build was about 30% slower than a plain build and a warm build about 33% faster. Compiling the preprocessed text instead changes `-g` objects and warning snippets, so it is not done.
 - `-g` builds do not share entries across directories.
-- The compiler is identified by its `--version` text only, not by a hash of the binary.
+- The compiler is identified by its `--version` text plus the size and modification time of the binary named in `InstalledDir:`, not by a hash of the binary. One test swaps a fake compiler for a file of a different size and checks that the key changes. A change that keeps both size and mtime is not caught, and size and mtime are not tested separately. If the output has no `InstalledDir:` line (GCC), or no file with the compiler's name is in that directory, only the `--version` text is used.
 - Other environment variables are not part of the key. Ones that change include paths show up in the preprocessed text, but nothing else has been checked.
 - `__TIME__` ends up in the preprocessed text, so a file using it gets a new key whenever the second changes, and a test checks this. `__DATE__` works the same way but is not tested.
 - Precompiled headers are not handled specially. One clang test (`-include-pch`) gave the same bytes as a plain compile after the header changed. GCC `.gch` files and other PCH uses are untested.
