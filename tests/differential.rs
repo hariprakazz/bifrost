@@ -403,3 +403,21 @@ fn failed_compile_shows_the_same_errors() {
         assert_eq!(got, want);
     }
 }
+
+#[test]
+fn restored_object_is_not_older_than_its_source() {
+    let work = scratch("mtime");
+    let cache = work.join("cache");
+    fs::write(work.join("a.c"), "int a(void) { return 1; }\n").unwrap();
+
+    bifrost(&work, &cache, &["-c", "a.c", "-o", "one.o"]);
+    std::thread::sleep(std::time::Duration::from_millis(1100));
+    fs::write(work.join("a.c"), "int a(void) { return 1; }\n").unwrap();
+    let second = bifrost(&work, &cache, &["-c", "a.c", "-o", "two.o"]);
+
+    let src_time = fs::metadata(work.join("a.c")).unwrap().modified().unwrap();
+    let obj_time = fs::metadata(work.join("two.o")).unwrap().modified().unwrap();
+
+    assert!(said(&second, "hit"));
+    assert!(obj_time >= src_time);
+}

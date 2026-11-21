@@ -2,6 +2,7 @@ use std::env;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 
 pub struct Store {
     root: PathBuf,
@@ -31,7 +32,11 @@ impl Store {
         }
         let dir = dest.parent().unwrap_or(Path::new(""));
         let tmp = dir.join(format!(".bifrost-{}.tmp", std::process::id()));
-        if let Err(err) = fs::copy(&slot, &tmp) {
+        let copied = fs::copy(&slot, &tmp).map(|_| ()).and_then(|_| {
+            let file = fs::OpenOptions::new().write(true).open(&tmp)?;
+            file.set_modified(SystemTime::now())
+        });
+        if let Err(err) = copied {
             let _ = fs::remove_file(&tmp);
             return Err(err);
         }
