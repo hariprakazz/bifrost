@@ -132,3 +132,50 @@ mod tests {
         assert_eq!(names, vec![KEY.to_string()]);
     }
 }
+
+#[cfg(test)]
+mod race_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+    use std::thread;
+
+    const KEY: &str = "cd34c0ffee00000000000000000000000000000000000000000000000000beef";
+
+    #[test]
+    fn reader_never_sees_a_partial_object() {
+        let dir = env::temp_dir().join(format!("bifrost-race-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let obj = dir.join("big.o");
+        let size = 4 * 1024 * 1024;
+        fs::write(&obj, vec![7u8; size]).unwrap();
+
+        let store = Arc::new(Store::new(dir.join("cache")));
+        store.put(KEY, &obj).unwrap();
+        let done = Arc::new(AtomicBool::new(false));
+
+        let writer = {
+            let store = Arc::clone(&store);
+            let done = Arc::clone(&done);
+            let obj = obj.clone();
+            thread::spawn(move || {
+                for _ in 0..40 {
+                    store.put(KEY, &obj).unwrap();
+                }
+                done.store(true, Ordering::SeqCst);
+            })
+        };
+
+        let mut seen = 0;
+        while !done.load(Ordering::SeqCst) {
+            let dest = dir.join("got.o");
+            if store.fetch(KEY, &dest).unwrap() {
+                assert_eq!(fs::metadata(&dest).unwrap().len() as usize, size);
+                seen += 1;
+            }
+        }
+        writer.join().unwrap();
+        assert!(seen > 0);
+    }
+}
