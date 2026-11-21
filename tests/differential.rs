@@ -377,3 +377,29 @@ fn hit_replays_compiler_warnings() {
     assert!(!want.is_empty());
     assert_eq!(got, want);
 }
+
+#[test]
+fn failed_compile_shows_the_same_errors() {
+    let work = scratch("errtext");
+    let cache = work.join("cache");
+    fs::write(work.join("a.c"), "int a(void) { return 1 }\n").unwrap();
+    let flags = ["-c", "a.c", "-o", "a.o"];
+
+    let direct = Command::new(cc()).args(flags).current_dir(&work).output().unwrap();
+    let want: Vec<String> = String::from_utf8_lossy(&direct.stderr)
+        .lines()
+        .map(|l| l.to_string())
+        .collect();
+    assert!(!want.is_empty());
+
+    for _ in 0..2 {
+        let via_cache = bifrost(&work, &cache, &flags);
+        let got: Vec<String> = String::from_utf8_lossy(&via_cache.stderr)
+            .lines()
+            .filter(|l| !l.starts_with("bifrost:"))
+            .map(|l| l.to_string())
+            .collect();
+        assert_eq!(via_cache.status.code(), direct.status.code());
+        assert_eq!(got, want);
+    }
+}
