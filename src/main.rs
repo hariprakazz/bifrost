@@ -4,7 +4,8 @@ mod stats;
 mod store;
 
 use std::env;
-use std::process::{exit, Command};
+use std::io::Write;
+use std::process::{exit, Command, Stdio};
 
 use store::Store;
 
@@ -14,6 +15,21 @@ fn run_real(compiler: &str, rest: &[String]) -> i32 {
         Err(err) => {
             eprintln!("bifrost: could not run {}: {}", compiler, err);
             127
+        }
+    }
+}
+
+fn run_capture(compiler: &str, rest: &[String]) -> (i32, Vec<u8>) {
+    let out = Command::new(compiler)
+        .args(rest)
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::piped())
+        .output();
+    match out {
+        Ok(out) => (out.status.code().unwrap_or(1), out.stderr),
+        Err(err) => {
+            eprintln!("bifrost: could not run {}: {}", compiler, err);
+            (127, Vec::new())
         }
     }
 }
@@ -32,13 +48,16 @@ fn try_cached(compiler: &str, rest: &[String]) -> Option<i32> {
     let root = Store::default_root()?;
     let store = Store::new(root.clone());
     let dep_id = format!("{}.dep", id);
+    let err_id = format!("{}.err", id);
+    let saved_err = store.read_bytes(&err_id);
 
     if let Ok(true) = store.fetch(&id, &job.obj) {
         let dep_ok = match &job.dep {
             Some(dep) => matches!(store.fetch(&dep_id, dep), Ok(true)),
             None => true,
         };
-        if dep_ok {
+        if let (true, Some(text)) = (dep_ok, &saved_err) {
+            let _ = std::io::stderr().write_all(text);
             note("hit");
             stats::record(&root, true);
             return Some(0);
@@ -47,13 +66,15 @@ fn try_cached(compiler: &str, rest: &[String]) -> Option<i32> {
 
     note("miss");
     stats::record(&root, false);
-    let code = run_real(compiler, rest);
+    let (code, text) = run_capture(compiler, rest);
+    let _ = std::io::stderr().write_all(&text);
     if code == 0 {
         let dep_saved = match &job.dep {
             Some(dep) => store.put(&dep_id, dep),
             None => Ok(()),
         };
-        let saved = dep_saved.and_then(|_| store.put(&id, &job.obj));
+        let err_saved = store.write_bytes(&err_id, &text);
+        let saved = err_saved.and_then(|_| dep_saved).and_then(|_| store.put(&id, &job.obj));
         if let Err(err) = saved {
             eprintln!("bifrost: cache write failed: {}", err);
         }

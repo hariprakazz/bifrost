@@ -351,3 +351,29 @@ fn same_deployment_target_still_hits() {
     assert!(said(&first, "miss"));
     assert!(said(&second, "hit"));
 }
+
+#[test]
+fn hit_replays_compiler_warnings() {
+    let work = scratch("replay");
+    let cache = work.join("cache");
+    fs::write(work.join("a.c"), "int a(void) { int unused; return 1; }\n").unwrap();
+    let flags = ["-Wall", "-c", "a.c", "-o", "a.o"];
+
+    bifrost(&work, &cache, &flags);
+    let second = bifrost(&work, &cache, &flags);
+    let direct = Command::new(cc()).args(flags).current_dir(&work).output().unwrap();
+
+    let got: Vec<String> = String::from_utf8_lossy(&second.stderr)
+        .lines()
+        .filter(|l| !l.starts_with("bifrost:"))
+        .map(|l| l.to_string())
+        .collect();
+    let want: Vec<String> = String::from_utf8_lossy(&direct.stderr)
+        .lines()
+        .map(|l| l.to_string())
+        .collect();
+
+    assert!(said(&second, "hit"));
+    assert!(!want.is_empty());
+    assert_eq!(got, want);
+}

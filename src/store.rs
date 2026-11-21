@@ -39,6 +39,19 @@ impl Store {
         Ok(true)
     }
 
+    pub fn read_bytes(&self, key: &str) -> Option<Vec<u8>> {
+        fs::read(self.slot(key)).ok()
+    }
+
+    pub fn write_bytes(&self, key: &str, data: &[u8]) -> io::Result<()> {
+        let slot = self.slot(key);
+        let parent = slot.parent().unwrap();
+        fs::create_dir_all(parent)?;
+        let tmp = parent.join(format!(".{}.{}", key, std::process::id()));
+        fs::write(&tmp, data)?;
+        fs::rename(&tmp, &slot)
+    }
+
     pub fn put(&self, key: &str, obj: &Path) -> io::Result<()> {
         let slot = self.slot(key);
         let parent = slot.parent().unwrap();
