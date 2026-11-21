@@ -421,3 +421,30 @@ fn restored_object_is_not_older_than_its_source() {
     assert!(said(&second, "hit"));
     assert!(obj_time >= src_time);
 }
+
+#[test]
+fn parallel_runs_agree_with_plain_compile() {
+    let work = scratch("parallel");
+    fs::write(work.join("a.c"), "int a(void) { return 1; }\n").unwrap();
+    plain(&work, &["-c", "a.c", "-o", "real.o"]);
+    let want = fs::read(work.join("real.o")).unwrap();
+
+    for round in 0..5 {
+        let cache = work.join(format!("cache{}", round));
+        let mut handles = Vec::new();
+        for n in 0..8 {
+            let work = work.clone();
+            let cache = cache.clone();
+            handles.push(std::thread::spawn(move || {
+                let out = format!("p{}_{}.o", round, n);
+                let run = bifrost(&work, &cache, &["-c", "a.c", "-o", out.as_str()]);
+                (out, run.status.success())
+            }));
+        }
+        for handle in handles {
+            let (out, ok) = handle.join().unwrap();
+            assert!(ok);
+            assert_eq!(fs::read(work.join(&out)).unwrap(), want);
+        }
+    }
+}
