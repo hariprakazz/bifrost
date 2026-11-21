@@ -87,6 +87,26 @@ fn compiler_version(compiler: &str) -> Option<Vec<u8>> {
     Some(out.stdout)
 }
 
+fn compiler_identity(compiler: &str, ver: &[u8]) -> Vec<u8> {
+    let text = String::from_utf8_lossy(ver);
+    let dir = text.lines().find_map(|l| l.strip_prefix("InstalledDir: "));
+    let name = std::path::Path::new(compiler).file_name();
+    let (Some(dir), Some(name)) = (dir, name) else {
+        return Vec::new();
+    };
+    let bin = std::path::Path::new(dir.trim()).join(name);
+    let Ok(meta) = std::fs::metadata(&bin) else {
+        return Vec::new();
+    };
+    let mtime = meta
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    format!("{}:{}:{}", bin.display(), meta.len(), mtime).into_bytes()
+}
+
 const ENV_KEYS: [&str; 3] = [
     "MACOSX_DEPLOYMENT_TARGET",
     "IPHONEOS_DEPLOYMENT_TARGET",
@@ -102,6 +122,7 @@ pub fn cache_key(compiler: &str, rest: &[String], pre: &[u8]) -> Option<String> 
     };
 
     feed(&ver);
+    feed(&compiler_identity(compiler, &ver));
     let with_dep = rest.iter().any(|a| a == "-MD" || a == "-MMD");
     let mut iter = rest.iter();
     while let Some(arg) = iter.next() {
@@ -155,5 +176,31 @@ mod flag_tests {
             cache_key("clang", &slow, &pre_slow),
             cache_key("clang", &fast, &pre_fast)
         );
+    }
+
+    #[test]
+    fn compiler_binary_change_changes_key() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join(format!("bifrost-id-{}", std::process::id()));
+        let bin_dir = dir.join("bin");
+        fs::create_dir_all(&bin_dir).unwrap();
+        let real = bin_dir.join("clang");
+        let shim_dir = dir.join("shim");
+        fs::create_dir_all(&shim_dir).unwrap();
+        let shim = shim_dir.join("clang");
+        let script = format!(
+            "#!/bin/sh\necho 'fake clang version 1'\necho 'InstalledDir: {}'\n",
+            bin_dir.display()
+        );
+        fs::write(&shim, script).unwrap();
+        fs::set_permissions(&shim, fs::Permissions::from_mode(0o755)).unwrap();
+        let compiler = shim.display().to_string();
+        let rest = argv("a.c", "-O0");
+        fs::write(&real, "one").unwrap();
+        let before = cache_key(&compiler, &rest, b"pre");
+        fs::write(&real, "two plus").unwrap();
+        let after = cache_key(&compiler, &rest, b"pre");
+        assert!(before.is_some());
+        assert_ne!(before, after);
     }
 }
