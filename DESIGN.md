@@ -33,7 +33,7 @@ Objects live at `<root>/<first two hex digits>/<key>`, with the depfile beside i
 - link steps, several sources, a missing `-o`
 - `-M` and `-MM`, and `-MF` without `-MD` or `-MMD`
 - flags that write extra files: `-ftime-trace`, `--serialize-diagnostics`, `-MJ`, `-save-temps`, `-fsave-optimization-record`
-- flags that read files the preprocessor does not see: `-fprofile-use`, `-fprofile-sample-use`, `-fsanitize-ignorelist`
+- flags that read files the preprocessor does not see: `-fprofile-use`, `-fprofile-sample-use`, `-fsanitize-ignorelist`, `-fsanitize-blacklist`
 - coverage and profile output: `--coverage`, `-fprofile-arcs`, `-ftest-coverage`, `-fprofile-generate`
 - response files that contain quotes, backslashes, a nested `@`, or cannot be read
 
@@ -44,7 +44,7 @@ Differential tests run Bifrost and the plain compiler on the same input and comp
 ## Known limits
 
 - Compiler stderr is captured through a pipe on a miss, so clang drops coloured diagnostics there unless `-fcolor-diagnostics` is passed. Build tools already pipe the output, so builds are unaffected.
-- A miss preprocesses the file twice. On Lua 5.4.7 (Apple clang, 5 runs, medians) a cold build was about 30% slower than a plain build and a warm build about 33% faster. Compiling the preprocessed text instead changes `-g` objects and warning snippets, so it is not done.
+- A miss preprocesses the file twice. On Lua 5.4.7 (Apple clang, 5 runs, medians) a cold build was about 33% slower than a plain build and a warm build about 33% faster. Compiling the preprocessed text instead changes `-g` objects and warning snippets, so it is not done.
 - `-g` builds do not share entries across directories.
 - The compiler is identified by its `--version` text plus the size and modification time of the binary named in `InstalledDir:`, not by a hash of the binary. One test swaps a fake compiler for a file of a different size and checks that the key changes. A change that keeps both size and mtime is not caught, and size and mtime are not tested separately. If the output has no `InstalledDir:` line (GCC), or no file with the compiler's name is in that directory, only the `--version` text is used.
 - Other environment variables are not part of the key. Ones that change include paths show up in the preprocessed text, but nothing else has been checked.
