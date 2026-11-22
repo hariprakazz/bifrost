@@ -1,6 +1,8 @@
 # bifrost
 
-A compiler cache for C and C++, written in Rust. It wraps clang or gcc, hashes everything a compile depends on, and reuses the object file when nothing changed.
+A compiler cache for C and C++, written in Rust. It wraps clang or gcc, hashes everything a compile depends on, and reuses the object file when nothing changed. The rule it follows: fast when it knows, safe when it doesn't.
+
+I built it with AI assistance and I can explain each design decision. The reasoning is in [DESIGN.md](DESIGN.md).
 
 ## Usage
 
@@ -8,7 +10,7 @@ A compiler cache for C and C++, written in Rust. It wraps clang or gcc, hashes e
     make CC="target/release/bifrost clang"
     target/release/bifrost --stats
 
-Set `BIFROST_DIR` to move the cache (default `~/.cache/bifrost`) and `BIFROST_LOG=1` to see hit and miss lines.
+Set `BIFROST_DIR` to move the cache (default `~/.cache/bifrost`), `BIFROST_MAX_MB` to change the size limit (default 5120), and `BIFROST_LOG=1` to see hit and miss lines.
 
 ## Status
 
@@ -31,7 +33,7 @@ Tests compare bifrost against the plain compiler byte for byte, covering hits, h
 
 ## Limits
 
-The cache is capped at 5 GiB by default (`BIFROST_MAX_MB` changes it), a miss loses coloured diagnostics in a terminal, and several cases are untested (`__DATE__`, GCC precompiled headers, environment variables beyond the macOS deployment ones). The full list and the cache key are in [DESIGN.md](DESIGN.md).
+A miss loses coloured diagnostics in a terminal. The cache trim walks the whole directory on every miss: one measurement on one machine is in DESIGN.md. Several cases are untested (`__DATE__`, GCC precompiled headers, GCC compiler identity, environment variables beyond the macOS deployment ones), and nobody but me has run it on their own project yet. The full list and the cache key are in [DESIGN.md](DESIGN.md).
 
 ## Stack
 
