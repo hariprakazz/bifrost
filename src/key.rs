@@ -203,4 +203,66 @@ mod flag_tests {
         assert!(before.is_some());
         assert_ne!(before, after);
     }
+
+    #[test]
+    fn compiler_mtime_change_changes_key() {
+        use std::os::unix::fs::PermissionsExt;
+        use std::time::{Duration, SystemTime};
+        let dir = std::env::temp_dir().join(format!("bifrost-mt-{}", std::process::id()));
+        let bin_dir = dir.join("bin");
+        let shim_dir = dir.join("shim");
+        fs::create_dir_all(&bin_dir).unwrap();
+        fs::create_dir_all(&shim_dir).unwrap();
+        let real = bin_dir.join("clang");
+        let shim = shim_dir.join("clang");
+        let script = format!(
+            "#!/bin/sh\necho 'fake clang version 1'\necho 'InstalledDir: {}'\n",
+            bin_dir.display()
+        );
+        fs::write(&shim, script).unwrap();
+        fs::set_permissions(&shim, fs::Permissions::from_mode(0o755)).unwrap();
+        let compiler = shim.display().to_string();
+        let rest = argv("a.c", "-O0");
+        fs::write(&real, "same").unwrap();
+        let file = fs::OpenOptions::new().write(true).open(&real).unwrap();
+        let stamp = SystemTime::now() - Duration::from_secs(3600);
+        file.set_modified(stamp).unwrap();
+        let before = cache_key(&compiler, &rest, b"pre");
+        file.set_modified(stamp + Duration::from_secs(60)).unwrap();
+        let after = cache_key(&compiler, &rest, b"pre");
+        assert!(before.is_some());
+        assert_ne!(before, after);
+    }
+
+    #[test]
+    fn compiler_size_change_changes_key() {
+        use std::os::unix::fs::PermissionsExt;
+        use std::time::{Duration, SystemTime};
+        let dir = std::env::temp_dir().join(format!("bifrost-sz-{}", std::process::id()));
+        let bin_dir = dir.join("bin");
+        let shim_dir = dir.join("shim");
+        fs::create_dir_all(&bin_dir).unwrap();
+        fs::create_dir_all(&shim_dir).unwrap();
+        let real = bin_dir.join("clang");
+        let shim = shim_dir.join("clang");
+        let script = format!(
+            "#!/bin/sh\necho 'fake clang version 1'\necho 'InstalledDir: {}'\n",
+            bin_dir.display()
+        );
+        fs::write(&shim, script).unwrap();
+        fs::set_permissions(&shim, fs::Permissions::from_mode(0o755)).unwrap();
+        let compiler = shim.display().to_string();
+        let rest = argv("a.c", "-O0");
+        let stamp = SystemTime::now() - Duration::from_secs(3600);
+        fs::write(&real, "same").unwrap();
+        let file = fs::OpenOptions::new().write(true).open(&real).unwrap();
+        file.set_modified(stamp).unwrap();
+        let before = cache_key(&compiler, &rest, b"pre");
+        fs::write(&real, "same but longer").unwrap();
+        let file = fs::OpenOptions::new().write(true).open(&real).unwrap();
+        file.set_modified(stamp).unwrap();
+        let after = cache_key(&compiler, &rest, b"pre");
+        assert!(before.is_some());
+        assert_ne!(before, after);
+    }
 }
