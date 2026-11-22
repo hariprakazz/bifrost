@@ -534,3 +534,21 @@ fn modules_bypass_the_cache() {
     assert!(!said(&second, "hit"));
     assert!(same_bytes(&work, "cached.o", "out.o"));
 }
+
+#[test]
+fn incbin_files_are_not_served_stale() {
+    let work = scratch("incbin");
+    let cache = work.join("cache");
+    fs::write(work.join("a.c"), "__asm__(\".incbin \\\"data.bin\\\"\");\nint f(void) { return 1; }\n").unwrap();
+    let flags = ["-c", "a.c", "-o", "out.o"];
+
+    fs::write(work.join("data.bin"), "AAAA").unwrap();
+    bifrost(&work, &cache, &flags);
+
+    fs::write(work.join("data.bin"), "BBBBBBBBBBBB").unwrap();
+    bifrost(&work, &cache, &flags);
+    fs::rename(work.join("out.o"), work.join("cached.o")).unwrap();
+    plain(&work, &flags);
+
+    assert!(same_bytes(&work, "cached.o", "out.o"));
+}

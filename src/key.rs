@@ -113,6 +113,14 @@ const ENV_KEYS: [&str; 3] = [
     "SDKROOT",
 ];
 
+const FILE_DIRECTIVES: [&[u8]; 2] = [b".incbin", b".include "];
+
+pub fn pulls_in_files(pre: &[u8]) -> bool {
+    FILE_DIRECTIVES
+        .iter()
+        .any(|word| pre.windows(word.len()).any(|chunk| chunk == *word))
+}
+
 pub fn cache_key(compiler: &str, rest: &[String], pre: &[u8]) -> Option<String> {
     let ver = compiler_version(compiler)?;
     let mut hasher = blake3::Hasher::new();
@@ -264,5 +272,22 @@ mod flag_tests {
         let after = cache_key(&compiler, &rest, b"pre");
         assert!(before.is_some());
         assert_ne!(before, after);
+    }
+}
+
+#[cfg(test)]
+mod directive_tests {
+    use super::*;
+
+    #[test]
+    fn asm_file_directives_are_spotted() {
+        assert!(pulls_in_files(b"__asm__(\".incbin \\\"d.bin\\\"\");"));
+        assert!(pulls_in_files(b"__asm__(\".include \\\"d.s\\\"\");"));
+    }
+
+    #[test]
+    fn plain_code_is_left_alone() {
+        assert!(!pulls_in_files(b"int main(void) { return 0; }"));
+        assert!(!pulls_in_files(b"# 1 \"a.c\"\nint x = cfg.include_paths;"));
     }
 }

@@ -44,6 +44,9 @@ fn try_cached(compiler: &str, rest: &[String]) -> Option<i32> {
     let flat = args::expand(rest)?;
     let job = args::parse(&flat)?;
     let pre = key::preprocessed(compiler, &flat)?;
+    if key::pulls_in_files(&pre) {
+        return None;
+    }
     let id = key::cache_key(compiler, &flat, &pre)?;
     let root = Store::default_root()?;
     let store = Store::new(root.clone());
