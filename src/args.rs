@@ -8,7 +8,7 @@ pub struct Job {
 
 const SRC_EXT: [&str; 4] = ["c", "cc", "cpp", "cxx"];
 
-const BYPASS: [&str; 13] = [
+const BYPASS: [&str; 19] = [
     "-ftime-trace",
     "--serialize-diagnostics",
     "-MJ",
@@ -22,6 +22,12 @@ const BYPASS: [&str; 13] = [
     "-fprofile-arcs",
     "-ftest-coverage",
     "-fprofile-generate",
+    "-fmodules",
+    "-fcxx-modules",
+    "-fmodule-",
+    "-fimplicit-module-maps",
+    "-fprebuilt-module-path",
+    "-fbuiltin-module-map",
 ];
 
 pub fn expand(rest: &[String]) -> Option<Vec<String>> {
@@ -174,6 +180,21 @@ mod tests {
         assert!(expand(&argv(&[&format!("@{}", quoted.display())])).is_none());
         assert!(expand(&argv(&[&format!("@{}", nested.display())])).is_none());
         assert!(expand(&argv(&["@/no/such/file.rsp"])).is_none());
+    }
+
+    #[test]
+    fn module_flags_are_skipped() {
+        for flag in [
+            "-fmodules",
+            "-fcxx-modules",
+            "-fmodules-cache-path=mc",
+            "-fmodule-map-file=m.modulemap",
+            "-fimplicit-module-maps",
+            "-fprebuilt-module-path=pm",
+            "-fbuiltin-module-map",
+        ] {
+            assert!(parse(&argv(&["-c", "a.c", flag, "-o", "a.o"])).is_none());
+        }
     }
 
     #[test]

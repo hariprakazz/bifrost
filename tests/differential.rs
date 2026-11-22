@@ -511,3 +511,26 @@ fn zero_limit_keeps_nothing() {
     assert!(said(&second, "miss"));
     assert!(work.join("two.o").is_file());
 }
+
+#[test]
+fn modules_bypass_the_cache() {
+    if cc() != "clang" {
+        return;
+    }
+    let work = scratch("modules");
+    let cache = work.join("cache");
+    fs::write(work.join("module.modulemap"), "module M { header \"m.h\" export * }\n").unwrap();
+    fs::write(work.join("a.c"), "#include \"m.h\"\nint f(void) { return g(); }\n").unwrap();
+    let flags = ["-fmodules", "-fmodules-cache-path=mc", "-O2", "-c", "a.c", "-o", "out.o"];
+
+    fs::write(work.join("m.h"), "static inline int g(void) { return 1; }\n").unwrap();
+    bifrost(&work, &cache, &flags);
+
+    fs::write(work.join("m.h"), "static inline int g(void) { return 22222; }\n").unwrap();
+    let second = bifrost(&work, &cache, &flags);
+    fs::rename(work.join("out.o"), work.join("cached.o")).unwrap();
+    plain(&work, &flags);
+
+    assert!(!said(&second, "hit"));
+    assert!(same_bytes(&work, "cached.o", "out.o"));
+}
