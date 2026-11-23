@@ -552,3 +552,24 @@ fn incbin_files_are_not_served_stale() {
 
     assert!(same_bytes(&work, "cached.o", "out.o"));
 }
+
+#[test]
+fn config_file_contents_are_not_served_stale() {
+    if cc() != "clang" {
+        return;
+    }
+    let work = scratch("config");
+    let cache = work.join("cache");
+    fs::write(work.join("a.c"), "int a(int x) { return x * 2 + x * 2; }\n").unwrap();
+    let flags = ["--config=./a.cfg", "-c", "a.c", "-o", "out.o"];
+
+    fs::write(work.join("a.cfg"), "-O0\n").unwrap();
+    bifrost(&work, &cache, &flags);
+
+    fs::write(work.join("a.cfg"), "-O2\n").unwrap();
+    bifrost(&work, &cache, &flags);
+    fs::rename(work.join("out.o"), work.join("cached.o")).unwrap();
+    plain(&work, &flags);
+
+    assert!(same_bytes(&work, "cached.o", "out.o"));
+}

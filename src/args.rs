@@ -8,7 +8,7 @@ pub struct Job {
 
 const SRC_EXT: [&str; 4] = ["c", "cc", "cpp", "cxx"];
 
-const BYPASS: [&str; 22] = [
+const BYPASS: [&str; 27] = [
     "-ftime-trace",
     "--serialize-diagnostics",
     "-MJ",
@@ -31,6 +31,11 @@ const BYPASS: [&str; 22] = [
     "-fprofile-instr-use",
     "-fprofile-list",
     "-fprofile-remap-file",
+    "-fplugin",
+    "-fpass-plugin",
+    "-load",
+    "-specs",
+    "--config",
 ];
 
 pub fn expand(rest: &[String]) -> Option<Vec<String>> {
@@ -206,6 +211,19 @@ mod tests {
             "-fprofile-instr-use=p.profdata",
             "-fprofile-list=l.txt",
             "-fprofile-remap-file=r.txt",
+        ] {
+            assert!(parse(&argv(&["-c", "a.c", flag, "-o", "a.o"])).is_none());
+        }
+    }
+
+    #[test]
+    fn code_loading_flags_are_skipped() {
+        for flag in [
+            "-fplugin=p.so",
+            "-fpass-plugin=p.so",
+            "-load",
+            "-specs=my.specs",
+            "--config=my.cfg",
         ] {
             assert!(parse(&argv(&["-c", "a.c", flag, "-o", "a.o"])).is_none());
         }
