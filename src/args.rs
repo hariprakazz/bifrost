@@ -8,7 +8,7 @@ pub struct Job {
 
 const SRC_EXT: [&str; 4] = ["c", "cc", "cpp", "cxx"];
 
-const BYPASS: [&str; 27] = [
+const BYPASS: [&str; 26] = [
     "-ftime-trace",
     "--serialize-diagnostics",
     "-MJ",
@@ -23,7 +23,6 @@ const BYPASS: [&str; 27] = [
     "-ftest-coverage",
     "-fprofile-generate",
     "-fmodules",
-    "-fcxx-modules",
     "-fmodule-",
     "-fimplicit-module-maps",
     "-fprebuilt-module-path",
@@ -69,7 +68,7 @@ pub fn parse(rest: &[String]) -> Option<Job> {
             "-MD" | "-MMD" => want_dep = true,
             "-MF" => dep_out = Some(PathBuf::from(iter.next()?)),
             "-M" | "-MM" => return None,
-            _ if BYPASS.iter().any(|p| arg.starts_with(p)) => return None,
+            _ if BYPASS.iter().any(|p| arg.starts_with(p)) && !arg.starts_with("-fmodule-file=") => return None,
             _ if arg.starts_with('-') => {}
             _ => {
                 let path = PathBuf::from(arg);
@@ -194,7 +193,6 @@ mod tests {
     fn module_flags_are_skipped() {
         for flag in [
             "-fmodules",
-            "-fcxx-modules",
             "-fmodules-cache-path=mc",
             "-fmodule-map-file=m.modulemap",
             "-fimplicit-module-maps",
@@ -227,6 +225,12 @@ mod tests {
         ] {
             assert!(parse(&argv(&["-c", "a.c", flag, "-o", "a.o"])).is_none());
         }
+    }
+
+    #[test]
+    fn module_file_flag_is_not_skipped() {
+        let flags = argv(&["-c", "a.cc", "-fcxx-modules", "-fmodule-file=m=m.pcm", "-o", "a.o"]);
+        assert!(parse(&flags).is_some());
     }
 
     #[test]

@@ -573,3 +573,77 @@ fn config_file_contents_are_not_served_stale() {
 
     assert!(same_bytes(&work, "cached.o", "out.o"));
 }
+
+#[test]
+fn named_module_file_contents_are_part_of_the_result() {
+    if cc() != "clang" {
+        return;
+    }
+    let work = scratch("namedmod");
+    let cache = work.join("cache");
+    fs::write(work.join("main.cc"), "import m;\nint f() { return g(); }\n").unwrap();
+    let flags = ["-std=c++20", "-O2", "-fcxx-modules", "-fmodule-file=m=m.pcm", "-c", "main.cc", "-o", "out.o"];
+
+    let precompile = |body: &str| {
+        let text = format!("export module m;\nexport inline int g() {{ return {}; }}\n", body);
+        fs::write(work.join("m.cppm"), text).unwrap();
+        let st = Command::new("clang++")
+            .args(["-std=c++20", "-fcxx-modules", "-x", "c++-module", "--precompile", "m.cppm", "-o", "m.pcm"])
+            .current_dir(&work)
+            .status()
+            .unwrap();
+        assert!(st.success());
+    };
+    let via_cache = || {
+        Command::new(env!("CARGO_BIN_EXE_bifrost"))
+            .arg("clang++")
+            .args(flags)
+            .current_dir(&work)
+            .env("BIFROST_DIR", &cache)
+            .env("BIFROST_LOG", "1")
+            .output()
+            .unwrap()
+    };
+
+    precompile("1");
+    via_cache();
+    precompile("22222");
+    via_cache();
+    fs::rename(work.join("out.o"), work.join("cached.o")).unwrap();
+    let st = Command::new("clang++").args(flags).current_dir(&work).status().unwrap();
+    assert!(st.success());
+
+    assert!(same_bytes(&work, "cached.o", "out.o"));
+}
+
+#[test]
+fn unchanged_module_file_still_hits() {
+    if cc() != "clang" {
+        return;
+    }
+    let work = scratch("namedmodhit");
+    let cache = work.join("cache");
+    fs::write(work.join("main.cc"), "import m;\nint f() { return g(); }\n").unwrap();
+    fs::write(work.join("m.cppm"), "export module m;\nexport inline int g() { return 1; }\n").unwrap();
+    let st = Command::new("clang++")
+        .args(["-std=c++20", "-fcxx-modules", "-x", "c++-module", "--precompile", "m.cppm", "-o", "m.pcm"])
+        .current_dir(&work)
+        .status()
+        .unwrap();
+    assert!(st.success());
+    let run = |out: &str| {
+        Command::new(env!("CARGO_BIN_EXE_bifrost"))
+            .arg("clang++")
+            .args(["-std=c++20", "-O2", "-fcxx-modules", "-fmodule-file=m=m.pcm", "-c", "main.cc", "-o", out])
+            .current_dir(&work)
+            .env("BIFROST_DIR", &cache)
+            .env("BIFROST_LOG", "1")
+            .output()
+            .unwrap()
+    };
+    let first = run("one.o");
+    let second = run("two.o");
+
+    assert!(said(&first, "miss"));
+    assert!(said(&second, "hit"));
+}

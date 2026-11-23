@@ -148,6 +148,13 @@ pub fn cache_key(compiler: &str, rest: &[String], pre: &[u8]) -> Option<String> 
         let val = std::env::var(name).unwrap_or_default();
         feed(format!("{}={}", name, val).as_bytes());
     }
+    for arg in rest {
+        let Some(spec) = arg.strip_prefix("-fmodule-file=") else {
+            continue;
+        };
+        let path = spec.split_once('=').map(|(_, p)| p).unwrap_or(spec);
+        feed(&std::fs::read(path).ok()?);
+    }
     feed(pre);
 
     Some(hasher.finalize().to_hex().to_string())
