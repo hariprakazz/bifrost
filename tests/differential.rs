@@ -647,3 +647,24 @@ fn unchanged_module_file_still_hits() {
     assert!(said(&first, "miss"));
     assert!(said(&second, "hit"));
 }
+
+#[test]
+fn stats_counts_uncached_runs() {
+    let work = scratch("uncached");
+    let cache = work.join("cache");
+    fs::write(work.join("a.c"), "int main(void) { return 0; }\n").unwrap();
+
+    bifrost(&work, &cache, &["-c", "a.c", "-o", "a.o"]);
+    bifrost(&work, &cache, &["a.o", "-o", "app"]);
+    bifrost(&work, &cache, &["--coverage", "-c", "a.c", "-o", "b.o"]);
+
+    let out = Command::new(env!("CARGO_BIN_EXE_bifrost"))
+        .arg("--stats")
+        .env("BIFROST_DIR", &cache)
+        .output()
+        .unwrap();
+    let text = String::from_utf8_lossy(&out.stdout);
+
+    assert!(text.contains("misses: 1"));
+    assert!(text.contains("uncached: 2"));
+}

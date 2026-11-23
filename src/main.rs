@@ -94,7 +94,7 @@ fn main() {
             exit(1);
         };
         let (hits, misses) = stats::totals(&root);
-        println!("hits: {}\nmisses: {}", hits, misses);
+        println!("hits: {}\nmisses: {}\nuncached: {}", hits, misses, stats::bypassed(&root));
         exit(0);
     }
 
@@ -103,6 +103,14 @@ fn main() {
         exit(2);
     };
 
-    let code = try_cached(compiler, rest).unwrap_or_else(|| run_real(compiler, rest));
+    let code = match try_cached(compiler, rest) {
+        Some(code) => code,
+        None => {
+            if let Some(root) = Store::default_root() {
+                stats::record_bypass(&root);
+            }
+            run_real(compiler, rest)
+        }
+    };
     exit(code);
 }

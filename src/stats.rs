@@ -19,6 +19,18 @@ pub fn totals(root: &Path) -> (usize, usize) {
     (hits, misses)
 }
 
+pub fn record_bypass(root: &Path) {
+    let _ = fs::create_dir_all(root);
+    if let Ok(mut log) = OpenOptions::new().create(true).append(true).open(root.join(LOG)) {
+        let _ = log.write_all(b"u\n");
+    }
+}
+
+pub fn bypassed(root: &Path) -> usize {
+    let text = fs::read_to_string(root.join(LOG)).unwrap_or_default();
+    text.lines().filter(|l| *l == "u").count()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -32,5 +44,22 @@ mod tests {
         record(&dir, true);
         record(&dir, true);
         assert_eq!(totals(&dir), (2, 1));
+    }
+}
+
+#[cfg(test)]
+mod bypass_tests {
+    use super::*;
+
+    #[test]
+    fn bypasses_are_counted_apart() {
+        let dir = std::env::temp_dir().join(format!("bifrost-bypass-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        assert_eq!(bypassed(&dir), 0);
+        record_bypass(&dir);
+        record_bypass(&dir);
+        record(&dir, true);
+        assert_eq!(bypassed(&dir), 2);
+        assert_eq!(totals(&dir), (1, 0));
     }
 }
